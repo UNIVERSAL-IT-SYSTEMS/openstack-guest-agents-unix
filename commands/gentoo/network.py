@@ -51,6 +51,9 @@ def configure_network(hostname, interfaces):
     # Figure out if this system is running OpenRC
     if os.path.islink('/sbin/runscript'):
         data, ifaces = _get_file_data_openrc(interfaces)
+    if os.path.exists('/usr/lib/systemd/system/'):
+        data, ifaces = _get_file_data_coreos(interfaces)
+        NETWORK_FILE = '/var/run/coreos-networking.sh'
     else:
         # Generate new /etc/resolv.conf file
         filepath, data = commands.network.get_resolv_conf(interfaces)
@@ -227,10 +230,61 @@ def _get_file_data_openrc(interfaces):
 
     return network_data, ifaces
 
+def _get_file_data_coreos(interfaces):
+    """
+    Return data for (sub-)interfaces and routes
+    """
+
+    ifaces = set()
+
+    network_data =  '#!/bin/bash\n'
+    network_data += '# Automatically generated, do not edit\n'
+
+    ifnames = interfaces.keys()
+    ifnames.sort()
+
+    for ifname in ifnames:
+        interface = interfaces[ifname]
+
+        label = interface['label']
+
+        ip4s = interface['ip4s']
+        ip6s = interface['ip6s']
+
+        gateway4 = interface['gateway4']
+        gateway6 = interface['gateway6']
+
+        dns = interface['dns']
+
+        iface_data = []
+
+        for ip in ip4s:
+            iface_data.append('ifconfig %s %s netmask %s' %
+                              (ifname, ip['address'], ip['netmask']))
+
+        for ip in ip6s:
+            iface_data.append('ifconfig %s inet6 add %s/%s' % (ifname, ip['address'], ip['prefixlen']))
+
+        network_data += '\n'.join(iface_data)
+
+        route_data = []
+
+        if gateway4:
+            route_data.append('route add default gw %s' % (gateway4))
+        if gateway6:
+            route_data.append('route -A inet6 add default gw %s' % (gateway6))
+
+        network_data += '\n' + '\n'.join(route_data)
+        ifaces.add(ifname)
+
+    return network_data, ifaces
+
 
 def get_interface_files(interfaces, version):
     if version == 'openrc':
         data, ifaces = _get_file_data_openrc(interfaces)
+    elif version == 'coreos':
+        data, ifaces = _get_file_data_coreos(interfaces)
     else:
         data, ifaces = _get_file_data_legacy(interfaces)
 

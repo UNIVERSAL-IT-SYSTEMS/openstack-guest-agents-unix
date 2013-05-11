@@ -430,6 +430,48 @@ class TestInterfacesUpdates(agent_test.TestCase):
         ]
         self.assertSequenceEqual(generated, expected)
 
+    def test_coreos_ipv4(self):
+        """Test setting public IPv4 for CoreOS networking"""
+        interface = {
+            'label': 'public',
+            'hwaddr': '00:11:22:33:44:55',
+            'ipv4': [('192.0.2.42', '255.255.255.0')],
+            'gateway4': '192.0.2.1',
+            'dns': ['192.0.2.2'],
+        }
+        outfiles = self._run_test('gentoo', eth0=interface, version='coreos')
+
+        self.assertTrue('net' in outfiles)
+        generated = outfiles['net'].rstrip().split('\n')
+        expected = [
+            '#!/bin/bash',
+            '# Automatically generated, do not edit',
+            'ifconfig eth0 192.0.2.42 netmask 255.255.255.0',
+            'route add default gw 192.0.2.1',
+        ]
+        self.assertSequenceEqual(generated, expected)
+
+    def test_coreos_ipv6(self):
+        """Test setting public IPv6 for Gentoo OpenRC networking"""
+        interface = {
+            'label': 'public',
+            'hwaddr': '00:11:22:33:44:55',
+            'ipv6': [('2001:db8::42', 96)],
+            'gateway6': '2001:db8::1',
+            'dns': ['2001:db8::2'],
+        }
+        outfiles = self._run_test('gentoo', eth0=interface, version='coreos')
+
+        self.assertTrue('net' in outfiles)
+        generated = outfiles['net'].rstrip().split('\n')
+        expected = [
+            '#!/bin/bash',
+            '# Automatically generated, do not edit',
+            'ifconfig eth0 inet6 add 2001:db8::42/96',
+            'route -A inet6 add default gw 2001:db8::1',
+        ]
+        self.assertSequenceEqual(generated, expected)
+
     def test_suse_ipv4(self):
         """Test setting public IPv4 for SuSE networking"""
         interface = {
